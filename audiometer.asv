@@ -1,0 +1,175 @@
+function audiometer(varargin)
+
+%% deal with input(s)
+
+
+%% define variables
+fs = 44100;
+ear = 1;% 2 for left, 1 for right ear
+white = [0.7020    0.7020    0.7020]; % default pushbutton color
+a = 1;
+audiometer_cal = [];
+load audiometer_cal;
+
+% generate pure tone at 10 kHz
+t = 0:1/fs:0.26;
+f = 10000;
+y1 = a.*sin(2*pi*f*t);
+y1 = gate(y1, 0.03,fs);
+y1 = change_spl(y1,audiometer_cal);
+
+off = zeros(1,round(0.173*fs));
+y1 = cat(2,y1,off);
+y = y1;
+y = cat(2,y,y1);
+y = cat(2,y,y1);
+y = cat(2,y,y1);
+t = 0:1/fs:(length(y)-1)/fs;
+y = y';
+
+%% create GUI
+fig_audio = figure('MenuBar','None','Units','Normalized','Position',[.3 .3 .4 .4]);
+
+% create GUI Objects
+uicontrol(fig_audio,'Style','Pushbutton','Tag','pb1','Units','Normalized',...
+    'Position',[.2 .1 .4 .18],'FontSize',24,...
+    'String','play tone','CallBack',@interval1)
+
+% calibrate button
+if nargin > 0
+    uicontrol(fig_audio,'Style','Pushbutton','Tag','pb2','Units','Normalized',...
+        'Position',[.6 .1 .3 .18],'FontSize',24,...
+        'String','calibrate','CallBack',@interval2)
+end
+
+uicontrol(fig_audio,'Style','ToggleButton','Tag','tb_l','Units','Normalized',...
+    'Position',[.5 .4 .2 .18],'FontSize',24,...
+    'String','Left','CallBack',@tb_l)
+
+uicontrol(fig_audio,'Style','ToggleButton','Tag','tb_r','Units','Normalized',...
+    'Position',[.5 .6 .2 .18],'FontSize',24,...
+    'String','Right','CallBack',@tb_r)
+
+uicontrol(fig_audio,'Style','slider','Tag','sl1','Units','Normalized',...
+    'Position',[.2 .3 .18 .2],'FontSize',24,'Value',50,...
+    'Min',0,'Max',100,'sliderstep',[0.05 0.05],'CallBack',@sl1)
+
+uicontrol('Style','Text','String','50','Units','Normalized','Tag','txt1',...
+    'FontSize',24,'Position',[.2,.55,.2,.2]);
+
+uicontrol('Style','Text','String','Remember to change scene in Lynx','Units'...
+    ,'Normalized','Tag','txt2','FontSize',12,'Position',[.1,.8,.8,.15]);
+
+
+handles = guihandles(fig_audio);
+
+% set button state to right ear
+set(handles.tb_l,'Value',0);
+set(handles.tb_r,'Value',1);
+white = get(handles.tb_r,'BackgroundColor');
+set(handles.tb_r,'BackgroundColor',[1 0 0]);
+%% play tone
+    function interval1(varargin)
+        
+        set(handles.txt2,'Visible','off');
+        
+        % adjust SPL
+        num = get(handles.sl1, 'Value');
+        y_out = change_spl(y,num - 100);
+        
+        % select ear
+        if ear == 1
+            y_out = cat(2,zeros(size(y_out)), y_out);
+        else
+            y_out = cat(2,y_out, zeros(size(y_out)));
+        end
+        
+        %play signal
+        set(handles.pb1,'BackgroundColor','y'); % change background color back to original
+        pause(0.1);
+        sound(y_out,fs);
+        pause(1.8);
+        set(handles.pb1,'BackgroundColor',white); % change background color back to original
+        
+        
+    end
+
+%% calibrate tone
+    function interval2(varargin)
+        
+        % generate pure tone at 10 kHz
+        t_cal = 0:1/fs:5;
+        y_cal = a.*sin(2*pi*f*t_cal);
+        y_cal = gate(y_cal, 0.03,fs);
+        audiometer_cal;
+        y_cal = change_spl(y_cal,audiometer_cal);
+        calculate_spl(y_cal)
+        
+        
+        % select ear
+        if ear == 1
+            y_cal = cat(1,zeros(size(y_cal)), y_cal);
+        else
+            y_cal = cat(1,y_cal, zeros(size(y_cal)));
+        end
+        y_cal = y_cal';
+        
+        %play signal
+        set(handles.pb2,'BackgroundColor','y'); % change background color back to original
+        pause(0.1);
+        sound(y_cal,fs);
+        pause(1.8);
+        set(handles.pb2,'BackgroundColor',white); % change background color back to original
+        
+        % get signal level and adjust tone level
+%         answer = inputdlg...
+%             ({'SPL should be 100 dB SPL. What dB SPL do we need to change by?'},...
+%             'Calibrate');
+%         audiometer_cal = str2num(answer{1}) + audiometer_cal;
+%         
+%         answer = questdlg('Save Calibration?');
+%         if strcmpi(answer,'Yes')
+%             save('audiometer_cal.mat', 'audiometer_cal');
+%         end
+    end
+
+%% Presentation Level
+    function sl1(varargin)
+        num = get(handles.sl1, 'Value');
+        num = round(num);
+        set(handles.txt1, 'String', num2str(num));
+        set(handles.sl1,'Value',num);
+    end
+
+%% left ear
+    function tb_l(varargin)
+        button_state = get(handles.tb_l,'Value');
+        if button_state == get(handles.tb_l,'Max')
+            ear = 2;
+            set(handles.tb_r,'Value',0);
+            set(handles.tb_r,'BackgroundColor',white);
+            set(handles.tb_l,'BackgroundColor',[0 0 1]);            
+        elseif button_state == get(handles.tb_l,'Min')
+            ear = 1;
+            set(handles.tb_r,'Value',1);
+            set(handles.tb_r,'BackgroundColor',[1 0 0]);
+            set(handles.tb_l,'BackgroundColor',white);
+        end
+    end
+
+%% right ear
+    function tb_r(varargin)
+        button_state = get(handles.tb_r,'Value');
+        if button_state == get(handles.tb_r,'Max')
+            ear = 1;
+            set(handles.tb_l,'Value',0);
+            set(handles.tb_r,'BackgroundColor',[1 0 0]);
+            set(handles.tb_l,'BackgroundColor',white);
+        elseif button_state == get(handles.tb_r,'Min')
+            ear = 2;
+            set(handles.tb_l,'Value',1);
+            set(handles.tb_r,'BackgroundColor',white);
+            set(handles.tb_l,'BackgroundColor',[0 0 1]);
+        end
+    end
+end
